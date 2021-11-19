@@ -25,11 +25,10 @@ public:
 
 class Material {
 public:
-    glm::dvec3 color;
-    double diffuse;
+    glm::dvec3 albedo;
     glm::dvec3 emission;
 
-    Material(const glm::dvec3 &emission, const glm::dvec3 &color, double diffuse) : color(color), diffuse(diffuse), emission(emission) {}
+    Material(const glm::dvec3 &emission, const glm::dvec3 &albedo) : albedo(albedo), emission(emission) {}
 
     Material() = default;
 };
@@ -204,24 +203,24 @@ glm::dvec3 traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, int curD
     HitInfo info{100000};
     // Diffuse calculation
     if (getClosestHit(r, sceneObjects, info)) {
-        if (curDepth > depth) return info.material.emission;
-        curDepth++;
+        double rr = drand48();
+        glm::dvec3 albedo = info.material.albedo;
+        double reflectivity = albedo.x > albedo.y && albedo.x > albedo.z ? albedo.x : albedo.y > albedo.z ? albedo.y : albedo.z;
+        if(rr > reflectivity){
+            return info.material.emission;
+        }
         glm::dvec2 hemisphereCoord = uniform_hemisphere_sampling();
         glm::dvec3 disturbance = convert_hemispherical_to_cartesian(hemisphereCoord);
         glm::dvec3 w = glm::normalize(info.normal);
         glm::dvec3 u = glm::normalize(glm::cross(info.normal, abs(info.normal.x) > 0.1 ? glm::dvec3(0, 1, 0) : glm::dvec3(1, 0, 0)));
         glm::dvec3 v = glm::cross(info.normal, u);
         glm::dvec3 sampleDirection = glm::normalize(u * disturbance.x + v * disturbance.y + w * disturbance.z);
-        glm::dvec3 diffuse_brdf_coef = info.material.color * (1.0 / PI);
+        glm::dvec3 diffuse_brdf_coef =  info.material.albedo * (1.0 / PI);
         double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
         double pdf = uniform_hesmisphere_pdf(hemisphereCoord);
         glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects, curDepth);
-//        printf("\nSAMPLE RAD: %lf,%lf,%lf",sample_radiance.x,sample_radiance.y,sample_radiance.z);
-//        printf("\nPDF: %lf",pdf);
-//        printf("\nCOS: %lf",cos_term);
-//        printf("\nBRDF: %lf,%lf,%lf",diffuse_brdf_coef.x,diffuse_brdf_coef.y,diffuse_brdf_coef.z);
-//        printf("\n---------");
-        return info.material.emission + (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
+        glm::dvec3 radiance = (info.material.emission + (diffuse_brdf_coef * sample_radiance * cos_term) / pdf);
+        return radiance / reflectivity;
     }
     return BACKGROUND_COLOR;
 }
@@ -233,7 +232,7 @@ inline int toInt(double x) {
 int main() {
     std::vector<Hittable *> sceneObjects;
     int width = 1024, height = 768;
-    int NUM_SAMPLES = 1000;
+    int NUM_SAMPLES = 200;
     Image output(width, height);
 
 #define SCENE_SMALL_PT
@@ -241,21 +240,21 @@ int main() {
 #ifdef SCENE_SMALL_PT
     //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
     Camera camera = Camera(glm::dvec3(50, 52, 295.6), glm::normalize(glm::dvec3(0, -0.042612, -1)), glm::dvec3(0, 1, 0), 29.4213, 1, width, height);
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({1e5 + 1, 40.8, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .25, .25), 1)));//Left
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({-1e5 + 99, 40.8, 81.6}), Material(glm::dvec3(), glm::dvec3(.25, .25, .75), 1)));//Rght
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 40.8, 1e5}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75), 1)));//Back
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 40.8, -1e5 + 170}), Material(glm::dvec3(), glm::dvec3(0, 0, 0), 1)));//Front Wall.
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 1e5, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75), 1)));//Botm
-    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, -1e5 + 81.6, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75), 1)));//Top
-    sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({27, 16.5, 47}), Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 1), 1)));//Mirr
-    sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({73, 16.5, 78}), Material(glm::dvec3(), glm::dvec3(1, 0.5, 0.20), 1)));//Glas
-    sceneObjects.push_back(new Sphere(600, camera.worldToCamera({50, 681.6 - .27, 81.6}), Material(glm::dvec3(12,12,12), glm::dvec3(), 1))); //Lite
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({1e5 + 1, 40.8, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .25, .25))));//Left
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({-1e5 + 99, 40.8, 81.6}), Material(glm::dvec3(), glm::dvec3(.25, .25, .75))));//Rght
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 40.8, 1e5}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75))));//Back
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 40.8, -1e5 + 170}), Material(glm::dvec3(), glm::dvec3(0,0,0))));//Front Wall.
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, 1e5, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75))));//Botm
+    sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, -1e5 + 81.6, 81.6}), Material(glm::dvec3(), glm::dvec3(.75, .75, .75))));//Top
+    sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({27, 16.5, 47}), Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 1))));//Mirr
+    sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({73, 16.5, 78}), Material(glm::dvec3(), glm::dvec3(1, 0.5, 0.20))));//Glas
+    sceneObjects.push_back(new Sphere(600, camera.worldToCamera({50, 681.6 - .27, 81.6}), Material(glm::dvec3(12, 12, 12), glm::dvec3(0,0,0)))); //Lite
 #endif
 
 #ifdef WHITE_FURNACE
     BACKGROUND_COLOR = glm::dvec3(0.5,0.5,0.5);
     Camera camera = Camera(glm::dvec3(0, 0, 0), glm::normalize(glm::dvec3(0, 0, -1)), glm::dvec3(0, 1, 0), 60, 1, width, height);
-    sceneObjects.push_back(new Sphere(1, camera.worldToCamera({0, 0, -4}), Material(glm::dvec3(), glm::dvec3(1, 1, 1), 1)));//Left
+    sceneObjects.push_back(new Sphere(1, camera.worldToCamera({0, 0, -4}), Material(glm::dvec3(), glm::dvec3(1, 1, 1))));//Left
 #endif
     time_t curTime = time(nullptr);
 
