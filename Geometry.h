@@ -26,6 +26,8 @@ public:
     Material() = default;
 };
 
+class Hittable;
+
 class HitInfo {
 public:
     double t;
@@ -34,6 +36,7 @@ public:
     glm::dvec3 normal;
     glm::dvec3 point;
     Material material;
+    Hittable *object;
 };
 
 class Hittable {
@@ -81,6 +84,7 @@ public:
             info.normal = -info.normal;
         }
         info.material = material;
+        info.object = this;
         return true;
     }
 
@@ -128,6 +132,7 @@ public:
 //            printf("Dist: %lf", dist);
             info.normal = denom > 0 ? -normal : normal;
             info.material = material;
+            info.object = this;
             return true;
         }
 
@@ -135,7 +140,7 @@ public:
     }
 
     double area() override {
-        return 2 * PI * radius;
+        return PI * radius * radius;
     }
 
     double uniform_pdf() {
@@ -145,8 +150,8 @@ public:
     glm::mat3x3 orthonormal_basis() {
         normal = glm::normalize(normal);
         glm::dvec3 z = glm::normalize(glm::cross(normal, glm::dvec3(-normal.y, normal.x, 0)));
-        glm::dvec3 x = glm::cross(z, normal);
-        glm::dvec3 y = glm::cross(z, x);
+        glm::dvec3 x = glm::normalize(glm::cross(z, normal));
+        glm::dvec3 y = glm::normalize(glm::cross(z, x));
 
         return {x, y, z};
     }
@@ -154,10 +159,11 @@ public:
     void uniform_surface_sampling(glm::dvec3 &point, glm::dvec3 &normal) {
         double u1 = drand48();
         double u2 = drand48();
-        double theta = 2 * u2;
+        double theta = 2 * PI * u2;
         double r = sqrt(u1);
         normal = this->normal;
-        point = position + (basis * glm::dvec3(r * cos(theta), 0, r * sin(theta)));
+        auto tmp = (basis * glm::dvec3(r * cos(theta), 0, r * sin(theta)));
+        point = position + tmp * radius;
         normal = glm::normalize(normal);
     }
 

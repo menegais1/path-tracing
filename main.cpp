@@ -80,10 +80,16 @@ glm::dvec3 BACKGROUND_COLOR = glm::dvec3(0, 0, 0);
 
 double geometricFactor(glm::dvec3 x, glm::dvec3 Nx, glm::dvec3 y, glm::dvec3 Ny) {
     glm::dvec3 dir = glm::normalize(y - x);
-    return (glm::dot(Nx, dir) * glm::dot(Ny, -dir)) / glm::pow(glm::distance(x, y), 2);
+    Nx = glm::normalize(Nx);
+    Ny = glm::normalize(Ny);
+    auto nxCos = glm::max(0.0, glm::dot(Nx, dir));
+    auto nyCos = glm::max(0.0, glm::dot(Ny, -dir));
+    auto r = glm::distance(x, y);
+    return (nxCos * nyCos) / (r * r);
 }
 
-glm::dvec3 traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources);
+glm::dvec3
+traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth);
 
 glm::dvec3
 direct_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
@@ -91,25 +97,20 @@ direct_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
     double pl = 1.0 / lightSources.size();
     double lightSourceIndex = (int) drand48() * lightSources.size();
     Hittable *lightSource = lightSources[lightSourceIndex];
+    if (info.object == lightSource) return glm::dvec3(0, 0, 0);
     double pyl = lightSource->uniform_pdf();
     glm::dvec3 y, Ny;
     lightSource->uniform_surface_sampling(y, Ny);
-//    printf("Y: %lf %lf %lf\n",y.x, y.y, y.z);
-//    printf("Normal Y: %lf %lf %lf\n",Ny.x, Ny.y, Ny.z);
     double G = geometricFactor(info.point, info.normal, y, Ny);
+
     glm::dvec3 direction = glm::normalize(y - info.point);
     HitInfo shadowHit{100000};
-    if (getClosestHit(Ray(info.point + 0.01 * direction, direction), lightSources, shadowHit)) {
+    if (getClosestHit(Ray(info.point + direction * 0.1, direction), sceneObjects, shadowHit)) {
         //Light source is visible to point X
-        if (glm::distance(shadowHit.point, y) < 0.01) {
+        if (glm::distance(shadowHit.point, y) < 0.001) {
             glm::dvec3 diffuse_brdf_coef = info.material.albedo * (1.0 / PI);
             double pdf = pl * pyl;
             glm::dvec3 radiance = (shadowHit.material.emission * diffuse_brdf_coef * G) / pdf;
-//            printf("Radiance: %lf %lf %lf\n",radiance.x, radiance.y, radiance.z);
-//            printf("Radiance: %lf %lf %lf\n",radiance.x, radiance.y, radiance.z);
-//            printf("emissions: %lf %lf %lf\n",shadowHit.material.emission.x, shadowHit.material.emission.y, shadowHit.material.emission.z);
-//            printf("G: %lf\n",G);
-//            printf("PDF: %lf\n",pdf);
             return radiance;
         }
         return glm::dvec3(0, 0, 0);
@@ -120,7 +121,7 @@ direct_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
 }
 
 glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
-                             const std::vector<Hittable *> &lightSources) {
+                             const std::vector<Hittable *> &lightSources, int depth) {
     double rr = drand48();
     glm::dvec3 albedo = info.material.albedo;
     double reflectivity =
@@ -128,7 +129,6 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
     if (rr > reflectivity) {
         return glm::dvec3(0, 0, 0);
     }
-
     glm::dvec2 hemisphereCoord = cos_weighted_hemisphere_sampling();
     glm::dvec3 disturbance = convert_hemispherical_to_cartesian(hemisphereCoord);
     glm::dvec3 w = glm::normalize(info.normal);
@@ -140,22 +140,27 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
     double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
     double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
     glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
-                                          lightSources);
+                                          lightSources, depth + 1);
     glm::dvec3 radiance = (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
     return radiance / reflectivity;
 
 }
 
 
-glm::dvec3 traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources) {
+glm::dvec3
+traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth) {
     HitInfo info{100000};
     // Diffuse calculation
     if (getClosestHit(r, sceneObjects, info)) {
         glm::dvec3 radiance = info.material.emission;
-        glm::dvec3 direct = direct_radiance(info, sceneObjects, lightSources);
-        glm::dvec3 indirect = indirect_radiance(info, sceneObjects, lightSources);
+        if (depth > 0) {
+            radiance = glm::dvec3(0);
+        }
 
-        return radiance + direct + indirect;
+        glm::dvec3 direct = direct_radiance(info, sceneObjects, lightSources);
+        glm::dvec3 indirect = indirect_radiance(info, sceneObjects, lightSources, depth);
+
+        return (radiance + direct + indirect);
     }
     return BACKGROUND_COLOR;
 }
@@ -197,7 +202,7 @@ int main() {
     std::vector<Hittable *> sceneObjects;
     std::vector<Hittable *> lightSources;
     int width = 1024, height = 768;
-    int NUM_SAMPLES = 100;
+    int NUM_SAMPLES = 10;
     Image output(width, height);
 
 #define SCENE_SMALL_PT
@@ -223,12 +228,13 @@ int main() {
                                       Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 0.99))));//Mirr
     sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({73, 16.5, 78}),
                                       Material(glm::dvec3(), glm::dvec3(0.99, 0.5, 0.20))));//Glas
-    sceneObjects.push_back(
-            new Disk(camera.worldToCamera({50, 681.6 - .27 - 600.6, 85}), 17, {0, -1, 0},
-                     Material(glm::dvec3(12, 12, 12), glm::dvec3(0.0, 0.0, 0.0)))); //Light
-    lightSources.push_back(
-            new Disk(camera.worldToCamera({50, 681.6 - .27 - 600.6, 85}), 17, {0, -1, 0},
-                     Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)))); //Light
+
+
+    Disk *lightSource = new Disk(camera.worldToCamera({50, 681.6 - .27 - 600.6, 85}), 17,
+                                 camera.normalToCamera({0, -1, 0}),
+                                 Material(glm::dvec3(12, 12, 12), glm::dvec3(0.0, 0.0, 0.0)));
+    sceneObjects.push_back(lightSource); //Light
+    lightSources.push_back(lightSource); //Light
 //    lightSources.push_back(new Sphere(600, camera.worldToCamera({50, 681.6 - .27, 81.6}),
 //                                      Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)))); //Light
 #endif
@@ -274,7 +280,7 @@ int main() {
 #else
                 Ray r = Ray(glm::dvec3(0, 0, 0) * direction, direction);
 #endif
-                glm::dvec3 radiance = traceRay(r, sceneObjects, lightSources);
+                glm::dvec3 radiance = traceRay(r, sceneObjects, lightSources, 0);
                 color = color + radiance;
             }
             color = color / (double) NUM_SAMPLES;

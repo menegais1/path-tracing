@@ -14,6 +14,7 @@ class Camera {
 
 public:
     glm::mat4x4 V;
+    glm::mat4x4 NormalMatrix;
 
     Camera(glm::vec3 eye, glm::vec3 forward, glm::vec3 up, double fov, double focalLength, int width, int height);
 
@@ -21,6 +22,8 @@ public:
     glm::dvec2 rasterToCamera(glm::dvec2 rasterCoord) const;
 
     glm::dvec3 worldToCamera(glm::dvec3 worldCoord);
+    glm::dvec3 normalToCamera(glm::dvec3 normal);
+
 private:
     double fov;
     double focalLength;
@@ -29,6 +32,7 @@ private:
     glm::dvec3 up = glm::dvec3(0, 1, 0);
     glm::dvec3 forward;
     int width, height;
+
 };
 
 
