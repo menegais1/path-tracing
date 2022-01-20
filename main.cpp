@@ -33,10 +33,10 @@ bool getClosestHit(Ray r, const std::vector<Hittable *> &sceneObjects, HitInfo &
     return hit;
 }
 
-//glm::dvec3 reflectVector(glm::dvec3 i, glm::dvec3 n) {
-//    return i - 2 * glm::dot(i, n) * n;
-//}
-//
+glm::dvec3 reflectVector(glm::dvec3 i, glm::dvec3 n) {
+    return i - 2 * glm::dot(i, n) * n;
+}
+
 //// https://en.wikipedia.org/wiki/Snell%27s_law
 //glm::dvec3 refractVector(glm::dvec3 i, glm::dvec3 n, double n1, double n2) {
 //    double nr = n1 / n2;
@@ -129,19 +129,37 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
     if (rr > reflectivity) {
         return glm::dvec3(0, 0, 0);
     }
-    glm::dvec2 hemisphereCoord = cos_weighted_hemisphere_sampling();
-    glm::dvec3 disturbance = convert_hemispherical_to_cartesian(hemisphereCoord);
-    glm::dvec3 w = glm::normalize(info.normal);
-    glm::dvec3 u = glm::normalize(
-            glm::cross(info.normal, abs(info.normal.x) > 0.1 ? glm::dvec3(0, 1, 0) : glm::dvec3(1, 0, 0)));
-    glm::dvec3 v = glm::cross(info.normal, u);
-    glm::dvec3 sampleDirection = glm::normalize(u * disturbance.x + v * disturbance.y + w * disturbance.z);
-    glm::dvec3 diffuse_brdf_coef = info.material.albedo * (1.0 / PI);
-    double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
-    double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
-    glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
-                                          lightSources, depth + 1);
-    glm::dvec3 radiance = (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
+    glm::dvec3 radiance = glm::dvec3(0);
+
+    if (info.material.materialType == MaterialType::Default) {
+        glm::dvec2 hemisphereCoord = cos_weighted_hemisphere_sampling();
+        glm::dvec3 disturbance = convert_hemispherical_to_cartesian(hemisphereCoord);
+        glm::dvec3 w = glm::normalize(info.normal);
+        glm::dvec3 u = glm::normalize(
+                glm::cross(info.normal, abs(info.normal.x) > 0.1 ? glm::dvec3(0, 1, 0) : glm::dvec3(1, 0, 0)));
+        glm::dvec3 v = glm::cross(info.normal, u);
+        glm::dvec3 sampleDirection = glm::normalize(u * disturbance.x + v * disturbance.y + w * disturbance.z);
+        glm::dvec3 diffuse_brdf_coef = info.material.albedo * (1.0 / PI);
+        double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
+        double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
+        glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
+                                              lightSources, depth + 1);
+        radiance = (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
+    } else if (info.material.materialType == MaterialType::Mirror) {
+        glm::dvec3 sampleDirection = reflectVector(info.incidentRay.direction, info.normal);
+        Ray reflectionRay = Ray(info.point + sampleDirection * 0.1, sampleDirection);
+        HitInfo lightReflectionHit{10000};
+        glm::dvec3 sample_radiance = glm::dvec3(0);
+        if (depth == 0 && getClosestHit(reflectionRay, lightSources, lightReflectionHit)) {
+            sample_radiance = lightReflectionHit.material.emission;
+        } else {
+            sample_radiance = traceRay(reflectionRay, sceneObjects,
+                                       lightSources, depth + 1);
+        }
+
+        radiance = sample_radiance;
+    }
+
     return radiance / reflectivity;
 
 }
@@ -157,7 +175,10 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
             radiance = glm::dvec3(0);
         }
 
-        glm::dvec3 direct = direct_radiance(info, sceneObjects, lightSources);
+        glm::dvec3 direct = glm::dvec3(0);
+        if (info.material.materialType != MaterialType::Mirror) {
+            direct = direct_radiance(info, sceneObjects, lightSources);
+        }
         glm::dvec3 indirect = indirect_radiance(info, sceneObjects, lightSources, depth);
 
         return (radiance + direct + indirect);
@@ -202,7 +223,7 @@ int main() {
     std::vector<Hittable *> sceneObjects;
     std::vector<Hittable *> lightSources;
     int width = 1024, height = 768;
-    int NUM_SAMPLES = 10;
+    int NUM_SAMPLES = 100;
     Image output(width, height);
 
 #define SCENE_SMALL_PT
@@ -225,18 +246,16 @@ int main() {
     sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, -1e5 + 81.6, 81.6}),
                                       Material(glm::dvec3(), glm::dvec3(.75, .75, .75))));//Top
     sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({27, 16.5, 47}),
-                                      Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 0.99))));//Mirr
+                                      Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 0.99), MaterialType::Mirror)));//Mirr
     sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({73, 16.5, 78}),
                                       Material(glm::dvec3(), glm::dvec3(0.99, 0.5, 0.20))));//Glas
 
 
-    Disk *lightSource = new Disk(camera.worldToCamera({50, 681.6 - .27 - 600.6, 85}), 17,
+    Disk *lightSource = new Disk(camera.worldToCamera({50, 681.6 - .27 - 599.8, 85}), 17,
                                  camera.normalToCamera({0, -1, 0}),
-                                 Material(glm::dvec3(12, 12, 12), glm::dvec3(0.0, 0.0, 0.0)));
+                                 Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)));
     sceneObjects.push_back(lightSource); //Light
     lightSources.push_back(lightSource); //Light
-//    lightSources.push_back(new Sphere(600, camera.worldToCamera({50, 681.6 - .27, 81.6}),
-//                                      Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)))); //Light
 #endif
 
 #ifdef PLANE_SCENE

@@ -14,14 +14,27 @@ public:
     glm::dvec3 direction;
 
     Ray(glm::dvec3 origin, glm::dvec3 direction) : origin(origin), direction(direction) {}
+
+    Ray() = default;
+};
+
+enum class MaterialType {
+    Default = 1,
+    Mirror = 2,
+    Glass = 3,
 };
 
 class Material {
 public:
     glm::dvec3 albedo;
     glm::dvec3 emission;
+    MaterialType materialType;
 
-    Material(const glm::dvec3 &emission, const glm::dvec3 &albedo) : albedo(albedo), emission(emission) {}
+    Material(const glm::dvec3 &emission, const glm::dvec3 &albedo, MaterialType materialType = MaterialType::Default)
+            : albedo(albedo),
+              emission(emission),
+              materialType(
+                      materialType) {}
 
     Material() = default;
 };
@@ -35,6 +48,7 @@ public:
     bool insideObject;
     glm::dvec3 normal;
     glm::dvec3 point;
+    Ray incidentRay;
     Material material;
     Hittable *object;
 };
@@ -85,6 +99,7 @@ public:
         }
         info.material = material;
         info.object = this;
+        info.incidentRay = r;
         return true;
     }
 
@@ -133,6 +148,7 @@ public:
             info.normal = denom > 0 ? -normal : normal;
             info.material = material;
             info.object = this;
+            info.incidentRay = r;
             return true;
         }
 
