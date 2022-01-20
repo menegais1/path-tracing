@@ -34,19 +34,32 @@ bool getClosestHit(Ray r, const std::vector<Hittable *> &sceneObjects, HitInfo &
 }
 
 glm::dvec3 reflectVector(glm::dvec3 i, glm::dvec3 n) {
-    return i - 2 * glm::dot(i, n) * n;
+    return glm::normalize(i - 2 * glm::dot(i, n) * n);
 }
 
-//// https://en.wikipedia.org/wiki/Snell%27s_law
-//glm::dvec3 refractVector(glm::dvec3 i, glm::dvec3 n, double n1, double n2) {
-//    double nr = n1 / n2;
-//    double cosI = -glm::dot(i,n);
-//    double totalRefTerm = 1 - (nr * nr) * (1 - (cosI * cosI));
-//    if (totalRefTerm < 0)
-//        return glm::dvec3(0,0,0);
-//    totalRefTerm = sqrt(totalRefTerm);
-//    return nr * i + n * (nr * cosI - totalRefTerm);
-//}
+// https://en.wikipedia.org/wiki/Snell%27s_law
+glm::dvec3 refractVector(glm::dvec3 i, glm::dvec3 n, double n1, double n2) {
+    double nr = n1 / n2;
+    double cosI = -glm::dot(i, n);
+    double totalRefTerm = 1 - (nr * nr) * (1 - (cosI * cosI));
+    if (totalRefTerm < 0)
+        return reflectVector(i, n);
+    totalRefTerm = sqrt(totalRefTerm);
+    return glm::normalize(nr * i + n * (nr * cosI - totalRefTerm));
+}
+
+// https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
+double rSchlick2(glm::dvec3 i, glm::dvec3 n, glm::dvec3 t, double n1, double n2) {
+    double r0 = (n1 - n2) / (n1 + n2);
+    r0 *= r0;
+    double cosX = -glm::dot(n, i);
+    if (n1 > n2) {
+        cosX = -glm::dot(n, t);
+    }
+    double x = 1 - cosX;
+    return r0 + (1 - r0) * x * x * x * x * x;
+}
+
 
 double uniform_hesmisphere_pdf(glm::dvec2 hemiCoord) {
     return 1.0 / (2 * PI);
@@ -89,7 +102,8 @@ double geometricFactor(glm::dvec3 x, glm::dvec3 Nx, glm::dvec3 y, glm::dvec3 Ny)
 }
 
 glm::dvec3
-traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth);
+traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth,
+         HitInfo lastHit);
 
 glm::dvec3
 direct_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
@@ -143,21 +157,43 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
         double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
         double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
         glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
-                                              lightSources, depth + 1);
+                                              lightSources, depth + 1, info);
         radiance = (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
     } else if (info.material.materialType == MaterialType::Mirror) {
         glm::dvec3 sampleDirection = reflectVector(info.incidentRay.direction, info.normal);
         Ray reflectionRay = Ray(info.point + sampleDirection * 0.1, sampleDirection);
         HitInfo lightReflectionHit{10000};
         glm::dvec3 sample_radiance = glm::dvec3(0);
-        if (depth == 0 && getClosestHit(reflectionRay, lightSources, lightReflectionHit)) {
-            sample_radiance = lightReflectionHit.material.emission;
-        } else {
-            sample_radiance = traceRay(reflectionRay, sceneObjects,
-                                       lightSources, depth + 1);
-        }
+        sample_radiance = traceRay(reflectionRay, sceneObjects,
+                                   lightSources, depth + 1, info);
 
         radiance = sample_radiance;
+    } else if (info.material.materialType == MaterialType::Glass) {
+        glm::dvec3 sample_radiance = glm::dvec3(0);
+
+        double n1 = 1.0;
+        double n2 = info.material.n;
+        if (info.insideObject) {
+            n1 = info.material.n;
+            n2 = 1.0;
+        }
+        glm::dvec3 refractionDirection = refractVector(info.incidentRay.direction, info.normal, n1, n2);
+        double fresnel_reflectance = rSchlick2(info.incidentRay.direction, info.normal, refractionDirection, n1, n2);
+        double rr_refraction = drand48();
+        if (rr_refraction < fresnel_reflectance) {
+            glm::dvec3 sampleDirection = reflectVector(info.incidentRay.direction, info.normal);
+            Ray reflectionRay = Ray(info.point + sampleDirection * 0.1, sampleDirection);
+            HitInfo lightReflectionHit{10000};
+
+            sample_radiance = traceRay(reflectionRay, sceneObjects,
+                                       lightSources, depth + 1, info);
+
+            radiance = sample_radiance;
+        } else {
+            sample_radiance = traceRay(Ray(info.point + refractionDirection * 0.1, refractionDirection), sceneObjects,
+                                       lightSources, depth + 1, info);
+            radiance = sample_radiance;
+        }
     }
 
     return radiance / reflectivity;
@@ -166,17 +202,18 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
 
 
 glm::dvec3
-traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth) {
+traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth,
+         HitInfo lastHit) {
     HitInfo info{100000};
     // Diffuse calculation
     if (getClosestHit(r, sceneObjects, info)) {
         glm::dvec3 radiance = info.material.emission;
-        if (depth > 0) {
+        if (depth > 0 && lastHit.material.materialType == MaterialType::Default) {
             radiance = glm::dvec3(0);
         }
 
         glm::dvec3 direct = glm::dvec3(0);
-        if (info.material.materialType != MaterialType::Mirror) {
+        if (info.material.materialType == MaterialType::Default) {
             direct = direct_radiance(info, sceneObjects, lightSources);
         }
         glm::dvec3 indirect = indirect_radiance(info, sceneObjects, lightSources, depth);
@@ -246,8 +283,12 @@ int main() {
     sceneObjects.push_back(new Sphere(1e5, camera.worldToCamera({50, -1e5 + 81.6, 81.6}),
                                       Material(glm::dvec3(), glm::dvec3(.75, .75, .75))));//Top
     sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({27, 16.5, 47}),
-                                      Material(glm::dvec3(), glm::dvec3(0.6, 0.34, 0.99), MaterialType::Mirror)));//Mirr
+                                      Material(glm::dvec3(),     glm::dvec3(0.6, 0.34, 0.99), 1.0,
+                                               MaterialType::Mirror)));//Mirr
     sceneObjects.push_back(new Sphere(16.5, camera.worldToCamera({73, 16.5, 78}),
+                                      Material(glm::dvec3(), glm::dvec3(0.99, 0.5, 0.20), 1.5,
+                                               MaterialType::Glass)));//Glas
+    sceneObjects.push_back(new Sphere(8.5, camera.worldToCamera({53, 16.5, 100}),
                                       Material(glm::dvec3(), glm::dvec3(0.99, 0.5, 0.20))));//Glas
 
 
@@ -299,7 +340,7 @@ int main() {
 #else
                 Ray r = Ray(glm::dvec3(0, 0, 0) * direction, direction);
 #endif
-                glm::dvec3 radiance = traceRay(r, sceneObjects, lightSources, 0);
+                glm::dvec3 radiance = traceRay(r, sceneObjects, lightSources, 0, HitInfo{10000});
                 color = color + radiance;
             }
             color = color / (double) NUM_SAMPLES;

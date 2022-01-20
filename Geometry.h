@@ -29,10 +29,11 @@ public:
     glm::dvec3 albedo;
     glm::dvec3 emission;
     MaterialType materialType;
-
-    Material(const glm::dvec3 &emission, const glm::dvec3 &albedo, MaterialType materialType = MaterialType::Default)
+    double n;
+    Material(const glm::dvec3 &emission, const glm::dvec3 &albedo, double n = 1.0,
+             MaterialType materialType = MaterialType::Default)
             : albedo(albedo),
-              emission(emission),
+              emission(emission), n(n),
               materialType(
                       materialType) {}
 
@@ -51,6 +52,7 @@ public:
     Ray incidentRay;
     Material material;
     Hittable *object;
+    double refraction = false;
 };
 
 class Hittable {
