@@ -8,6 +8,27 @@
 
 #include "glm/glm.hpp"
 
+struct PnuVertexInput {
+public:
+    glm::dvec3 position;
+    glm::dvec3 normal;
+    glm::dvec2 uv;
+    glm::dvec3 tangent{};
+
+    PnuVertexInput(const glm::dvec3 &position, const glm::dvec3 &normal, const glm::dvec2 &uv) : position(position),
+                                                                                                 normal(normal), uv(uv),
+                                                                                                 tangent(glm::dvec3(0,
+                                                                                                                    0,
+                                                                                                                    0)) {};
+
+    PnuVertexInput() : position(glm::dvec3(0, 0, 0)), normal(glm::dvec3(0, 0, 0)), uv(glm::dvec3(0, 0, 0)),
+                       tangent(glm::dvec3(0, 0, 0)) {};
+
+    bool operator==(const PnuVertexInput &other) const {
+        return position == other.position && uv == other.uv && normal == other.normal;
+    };
+};
+
 class Ray {
 public:
     glm::dvec3 origin;
@@ -30,6 +51,7 @@ public:
     glm::dvec3 emission;
     MaterialType materialType;
     double n;
+
     Material(const glm::dvec3 &emission, const glm::dvec3 &albedo, double n = 1.0,
              MaterialType materialType = MaterialType::Default)
             : albedo(albedo),
@@ -193,101 +215,111 @@ public:
 
 };
 
-//class Rectangle : public Hittable {
-//public:
-//    glm::dvec3 p0;
-//    glm::dvec3 p1;
-//    Material material;
-//
-//    bool hit(const Ray &r, HitInfo &info) override {
-//        // assuming vectors are all normalized
-//        float denom = glm::dot(normal, r.direction);
-//        if (abs(denom) > 1e-6) {
-//            glm::dvec3 p0l0 = p0 - r.origin;
-//            info.t = glm::dot(p0l0, normal) / denom;
-//            if (info.t < 0) return false;
-//            info.point = r.origin + r.direction * info.t;
-//            if (info.point.x > max.x || info.point.y > max.y || info.point.z > max.z || info.point.x < min.x ||
-//                info.point.y < min.y || info.point.z < min.z)
-//                return false;
-//            info.normal = denom > 0 ? normal : -normal;
-//            info.material = material;
-//            return true;
-//        }
-//
-//        return false;
-//    }
-//
-//    void AABB() {
-//        min.x = glm::min(p0.x, p1.x);
-//        min.y = glm::min(p0.y, p1.y);
-//        min.z = glm::min(p0.z, p1.z);
-//        max.x = glm::max(p0.x, p1.x);
-//        max.y = glm::max(p0.y, p1.y);
-//        max.z = glm::max(p0.z, p1.z);
-//        auto tmp = glm::dvec3(p1.x, p0.y, p1.z);
-//        normal = glm::cross(p1 - p0, tmp - p0);
-//    }
-//
-//    double area() override {
-//        throw "error, not implemented";
-//    }
-//
-//    Rectangle(glm::dvec3 p0, glm::dvec3 p1, Material material) : p0(p0), p1(p1), material(material) {
-//        AABB();
-//    }
-//
-//private:
-//    glm::dvec3 min;
-//    glm::dvec3 max;
-//    glm::dvec3 normal;
-//};
-//
-//class Triangle : public Hittable {
-//public:
-//    glm::dvec3 v0, v1, v2;
-//
-//    Material material;
-//
-//    bool hit(const Ray &r, HitInfo &info) override {
-//        const float EPSILON = 0.0000001;
-//        glm::dvec3 vertex0 = v0;
-//        glm::dvec3 vertex1 = v1;
-//        glm::dvec3 vertex2 = v2;
-//        glm::dvec3 edge1, edge2, h, s, q;
-//        float a, f, u, v;
-//        edge1 = vertex1 - vertex0;
-//        edge2 = vertex2 - vertex0;
-//        h = glm::cross(r.direction, edge2);
-//        a = glm::dot(edge1, h);
-//        if (a > -EPSILON && a < EPSILON)
-//            return false;    // This ray is parallel to this triangle.
-//        f = 1.0 / a;
-//        s = r.origin - vertex0;
-//        u = f * glm::dot(s, h);
-//        if (u < 0.0 || u > 1.0)
-//            return false;
-//        q = glm::cross(s, edge1);
-//        v = f * glm::dot(r.direction, q);
-//        if (v < 0.0 || u + v > 1.0)
-//            return false;
-//        // At this stage we can compute t to find out where the intersection point is on the line.
-//        double t = f * glm::dot(edge2, q);
-//        if (t > EPSILON) // ray intersection
-//        {
-//            info.t = t;
-//            info.point = r.origin + r.direction * t;
-//            info.material = material;
-//            info.normal = glm::cross(edge1, edge2);
-//            return true;
-//        } else // This means that there is a line intersection but not a ray intersection.
-//            return false;
-//    }
-//
-//    Triangle(glm::dvec3 v0, glm::dvec3 v1, glm::dvec3 v2, Material material) : v0(v0), v1(v1), v2(v2),
-//                                                                               material(material) {}
-//
-//};
+class Triangle : public Hittable {
+public:
+    PnuVertexInput v0, v1, v2;
+    Material material;
+
+    bool hit(const Ray &r, HitInfo &info) override {
+        const float EPSILON = 0.0000001;
+        glm::dvec3 vertex0 = v0.position;
+        glm::dvec3 vertex1 = v1.position;
+        glm::dvec3 vertex2 = v2.position;
+        glm::dvec3 edge1, edge2, h, s, q;
+        float a, f, u, v;
+        edge1 = vertex1 - vertex0;
+        edge2 = vertex2 - vertex0;
+        h = glm::cross(r.direction, edge2);
+        a = glm::dot(edge1, h);
+        if (a > -EPSILON && a < EPSILON)
+            return false;    // This ray is parallel to this triangle.
+        f = 1.0 / a;
+        s = r.origin - vertex0;
+        u = f * glm::dot(s, h);
+        if (u < 0.0 || u > 1.0)
+            return false;
+        q = glm::cross(s, edge1);
+        v = f * glm::dot(r.direction, q);
+        if (v < 0.0 || u + v > 1.0)
+            return false;
+        // At this stage we can compute t to find out where the intersection point is on the line.
+        double t = f * glm::dot(edge2, q);
+        if (t > EPSILON) // ray intersection
+        {
+            info.t = t;
+            info.point = r.origin + r.direction * t;
+            info.material = material;
+            info.normal = glm::normalize(glm::cross(v1.position - v0.position, v2.position - v0.position));
+            return true;
+        } else // This means that there is a line intersection but not a ray intersection.
+            return false;
+    }
+
+    double area() override {
+        auto a = glm::length(glm::cross(v1.position - v0.position, v2.position - v0.position)) / 2.0;
+        return a;
+    }
+
+    void uniform_surface_sampling(glm::dvec3 &point, glm::dvec3 &normal) override {
+        double u = drand48();
+        double v = drand48();
+        double su0 = std::sqrt(u);
+        double b0 = 1 - su0;
+        double b1 = v * su0;
+        point = v0.position * b0 + v1.position * b1 + v2.position * (1.0 - b0 - b1);
+        normal = glm::normalize(glm::cross(v1.position - v0.position, v2.position - v0.position));
+    }
+
+    double uniform_pdf() override {
+        return 1 / area();
+    }
+
+    Triangle(PnuVertexInput v0, PnuVertexInput v1, PnuVertexInput v2, Material material) : v0(v0), v1(v1), v2(v2),
+                                                                                           material(material) {}
+
+};
+
+class Object : public Hittable {
+public:
+    std::vector<Triangle *> triangles;
+    Material material;
+
+    bool hit(const Ray &r, HitInfo &info) override {
+        bool hit = false;
+        HitInfo curHit{100000};
+        for (int i = 0; i < triangles.size(); ++i) {
+            if (triangles[i]->hit(r, curHit)) {
+                hit = true;
+                if (curHit.t < info.t) info = curHit;
+            }
+        }
+        info.material = material;
+        info.object = this;
+        info.incidentRay = r;
+        return hit;
+    }
+
+    double area() override {
+        double sum = 0;
+        for (const auto &item: triangles) {
+            sum += item->area();
+        }
+        return sum;
+    }
+
+    void uniform_surface_sampling(glm::dvec3 &point, glm::dvec3 &normal) override {
+        int index = (int) (drand48() * triangles.size());
+        triangles[index]->uniform_surface_sampling(point, normal);
+    }
+
+    double uniform_pdf() override {
+        return 1.0 / area();
+    }
+
+    Object(std::vector<Triangle *> triangles, Material material) : triangles(triangles), material(material) {
+
+    }
+};
 
 
 #endif //PATHTRACING_GEOMETRY_H

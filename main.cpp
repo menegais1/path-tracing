@@ -4,14 +4,11 @@
 #include <omp.h>
 #include <glm/gtx/hash.hpp>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-
-#include "Libs/tiny_obj_loader.h"
-
 #include <unordered_map>
 #include "Camera.h"
 #include "Geometry.h"
 #include "Image.h"
+#include "ObjLoader.h"
 
 #define byte unsigned char
 #define PI 3.145
@@ -23,6 +20,7 @@ bool getClosestHit(Ray r, const std::vector<Hittable *> &sceneObjects, HitInfo &
     bool hit = false;
     for (int i = 0; i < sceneObjects.size(); ++i) {
         Hittable *object = sceneObjects[i];
+
         if (object->hit(r, curHit)) {
             hit = true;
             if (curHit.t < hitInfo.t) {
@@ -109,7 +107,7 @@ glm::dvec3
 direct_radiance(HitInfo info, const std::vector<Hittable *> &sceneObjects,
                 const std::vector<Hittable *> &lightSources) {
     double pl = 1.0 / lightSources.size();
-    double lightSourceIndex = (int) drand48() * lightSources.size();
+    int lightSourceIndex = (int) (drand48() * lightSources.size());
     Hittable *lightSource = lightSources[lightSourceIndex];
     if (info.object == lightSource) return glm::dvec3(0, 0, 0);
     double pyl = lightSource->uniform_pdf();
@@ -212,6 +210,7 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
             radiance = glm::dvec3(0);
         }
 
+
         glm::dvec3 direct = glm::dvec3(0);
         if (info.material.materialType == MaterialType::Default) {
             direct = direct_radiance(info, sceneObjects, lightSources);
@@ -224,7 +223,8 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
 }
 //
 //glm::dvec3
-//traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources) {
+//traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth,
+//         HitInfo lastHit) {
 //    HitInfo info{100000};
 //    // Diffuse calculation
 //    if (getClosestHit(r, sceneObjects, info)) {
@@ -246,10 +246,11 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
 //        double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
 //        double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
 //        glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
-//                                              lightSources);
+//                                              lightSources,depth,lastHit);
 //        glm::dvec3 radiance = (info.material.emission + (diffuse_brdf_coef * sample_radiance * cos_term) / pdf);
 //        return radiance / reflectivity;
 //    }
+//    return BACKGROUND_COLOR;
 //}
 
 inline int toInt(double x) {
@@ -263,7 +264,7 @@ int main() {
     int NUM_SAMPLES = 100;
     Image output(width, height);
 
-#define SCENE_SMALL_PT
+#define PLANE_SCENE
 
 #ifdef SCENE_SMALL_PT
     //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
@@ -300,19 +301,19 @@ int main() {
 #endif
 
 #ifdef PLANE_SCENE
-    BACKGROUND_COLOR = glm::dvec3(0, 0, 0);
+    BACKGROUND_COLOR = glm::dvec3(0);
     //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
-    Camera camera = Camera(glm::dvec3(0, 0, 0), glm::normalize(glm::dvec3(0, 0, -1)), glm::dvec3(0, 1, 0), 29.4213, 1, width, height);
-    lightSources.push_back(new Disk(camera.worldToCamera({0, 0, -10}), 1,{0, 0, 1}, Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    sceneObjects.push_back(new Disk(camera.worldToCamera({0, 0, -10}), 1,{0, 0, 1}, Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    lightSources.push_back(new Disk(camera.worldToCamera({-2, 0, -10}), 1,glm::normalize(glm::dvec3(0.6, 0, 0.5)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    sceneObjects.push_back(new Disk(camera.worldToCamera({-2, 0, -10}), 1,glm::normalize(glm::dvec3(0.6, 0, 0.5)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    lightSources.push_back(new Disk(camera.worldToCamera({0, -2, -10}), 1,glm::normalize(glm::dvec3(0,1,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    sceneObjects.push_back(new Disk(camera.worldToCamera({0, -2, -10}), 1,glm::normalize(glm::dvec3(0,1,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-     lightSources.push_back(new Disk(camera.worldToCamera({-1, -1, -10}), 1,glm::normalize(glm::dvec3(1,0,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    sceneObjects.push_back(new Disk(camera.worldToCamera({-1, -1, -10}), 1,glm::normalize(glm::dvec3(1,0,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-     lightSources.push_back(new Disk(camera.worldToCamera({1, -1, -10}), 1,glm::normalize(glm::dvec3(-1,0,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
-    sceneObjects.push_back(new Disk(camera.worldToCamera({1, -1, -10}), 1,glm::normalize(glm::dvec3(-1,0,0)), Material(glm::dvec3(20,10,10), glm::dvec3())));//Left
+    glm::dvec3 eye = glm::dvec3(278, 273, -800);
+    glm::dvec3 look_at = glm::dvec3(278, 273, -799);
+    Camera camera = Camera(eye, look_at - eye, glm::dvec3(0, 1, 0), 39.3077, 1, width, height);
+    Object *largeBox = new Object(LoadObj("../cbox/meshes/cbox_largebox.obj", camera),
+                                  Material(glm::dvec3(0), glm::dvec3(0.88, 0.2, 0.6)));
+    Object *smallBox = new Object(LoadObj("../cbox/meshes/cbox_smallbox.obj", camera),
+                                  Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)));
+    sceneObjects.push_back(largeBox);
+    sceneObjects.push_back(smallBox);
+    lightSources.push_back(smallBox);
+
 #endif
 
 #ifdef WHITE_FURNACE
