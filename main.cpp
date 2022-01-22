@@ -206,6 +206,8 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
     // Diffuse calculation
     if (getClosestHit(r, sceneObjects, info)) {
         glm::dvec3 radiance = info.material.emission;
+//        if(radiance.x > 0)
+//            printf("Radiance: %lf %lf %lf\n", radiance.x, radiance.y, radiance.z);
         if (depth > 0 && lastHit.material.materialType == MaterialType::Default) {
             radiance = glm::dvec3(0);
         }
@@ -221,7 +223,7 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
     }
     return BACKGROUND_COLOR;
 }
-//
+
 //glm::dvec3
 //traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<Hittable *> &lightSources, int depth,
 //         HitInfo lastHit) {
@@ -299,7 +301,7 @@ int main() {
     sceneObjects.push_back(lightSource); //Light
     lightSources.push_back(lightSource); //Light
 #endif
-
+#define PINK 0.88, 0.2, 0.6
 #ifdef PLANE_SCENE
     BACKGROUND_COLOR = glm::dvec3(0);
     //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
@@ -307,13 +309,30 @@ int main() {
     glm::dvec3 look_at = glm::dvec3(278, 273, -799);
     Camera camera = Camera(eye, look_at - eye, glm::dvec3(0, 1, 0), 39.3077, 1, width, height);
     Object *largeBox = new Object(LoadObj("../cbox/meshes/cbox_largebox.obj", camera),
-                                  Material(glm::dvec3(0), glm::dvec3(0.88, 0.2, 0.6)));
+                                  Material(glm::dvec3(0), glm::dvec3(.5)));
     Object *smallBox = new Object(LoadObj("../cbox/meshes/cbox_smallbox.obj", camera),
-                                  Material(glm::dvec3(12, 12, 12), glm::dvec3(0, 0, 0)));
+                                  Material(glm::dvec3(0), glm::dvec3(.5)));
+    Object *backWall = new Object(LoadObj("../cbox/meshes/cbox_back.obj", camera),
+                                  Material(glm::dvec3(), glm::dvec3(.4)));
+    Object *greenWall = new Object(LoadObj("../cbox/meshes/cbox_greenwall.obj", camera),
+                                   Material(glm::dvec3(), glm::dvec3(0,.5,0)));
+    Object *redWall = new Object(LoadObj("../cbox/meshes/cbox_redwall.obj", camera),
+                                 Material(glm::dvec3(), glm::dvec3(.5,0,0)));
+    Object *ceiling = new Object(LoadObj("../cbox/meshes/cbox_ceiling.obj", camera),
+                                 Material(glm::dvec3(), glm::dvec3(.4)));
+    Object *floor = new Object(LoadObj("../cbox/meshes/cbox_floor.obj", camera),
+                               Material(glm::dvec3(), glm::dvec3(.4)));
+    Object *luminaire = new Object(LoadObj("../cbox/meshes/cbox_luminaire.obj", camera, {0,-0.5,0}),
+                                   Material(glm::dvec3(18.4, 15.6, 8.0) *2.0, glm::dvec3(0)));
     sceneObjects.push_back(largeBox);
     sceneObjects.push_back(smallBox);
-    lightSources.push_back(smallBox);
-
+    sceneObjects.push_back(backWall);
+    sceneObjects.push_back(greenWall);
+    sceneObjects.push_back(redWall);
+    sceneObjects.push_back(ceiling);
+    sceneObjects.push_back(floor);
+    sceneObjects.push_back(luminaire);
+    lightSources.push_back(luminaire);
 #endif
 
 #ifdef WHITE_FURNACE

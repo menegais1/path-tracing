@@ -30,7 +30,7 @@ PnuVertexInput getVertexInfo(const tinyobj::attrib_t &attrib, const std::vector<
     return PnuVertexInput(vertex, normal, glm::dvec2(0));
 }
 
-std::vector<Triangle *> LoadObj(const std::string &inputFile, Camera camera) {
+std::vector<Triangle *> LoadObj(const std::string &inputFile, Camera camera, glm::dvec3 translate = glm::dvec3(0,0,0)) {
 
     tinyobj::ObjReaderConfig reader_config;
     reader_config.mtl_search_path = "./"; // Path to material files
@@ -73,9 +73,9 @@ std::vector<Triangle *> LoadObj(const std::string &inputFile, Camera camera) {
         PnuVertexInput v1 = getVertexInfo(attrib, shapes, 0, index_offset + 1);
         PnuVertexInput v2 = getVertexInfo(attrib, shapes, 0, index_offset + 2);
 
-        v0.position = camera.worldToCamera(v0.position);
-        v1.position = camera.worldToCamera(v1.position);
-        v2.position = camera.worldToCamera(v2.position);
+        v0.position = camera.worldToCamera(v0.position + translate);
+        v1.position = camera.worldToCamera(v1.position + translate);
+        v2.position = camera.worldToCamera(v2.position + translate);
         index_offset += fv;
 
         // per-face material
