@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<scene version="0.5.0">
+	<integrator type="path"/>
+
+	<default name="spp" value="64"/>
+
+	<sensor type="perspective">
+		<string name="fovAxis" value="smaller"/>
+		<float name="nearClip" value="10"/>
+		<float name="farClip" value="2800"/>
+		<float name="focusDistance" value="1000"/>
+		<transform name="toWorld">
+			<lookAt origin="-32.871, 4.9361, -14.538" target="-32.871, 4.9361, -13.538" up="0, 1, 0"/>
+		</transform>
+		<float name="fov" value="40"/>
+
+		<sampler type="independent">
+			<integer name="sampleCount" value="$spp"/>
+		</sampler>
+
+		<film type="hdrfilm">
+			<integer name="width" value="768"/>
+			<integer name="height" value="768"/>
+
+			<rfilter type="box"/>
+		</film>
+	</sensor>
+
+	<shape type="obj">
+		<string name="filename" value="cbox_luminaire.obj"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="152.1,72.3,42.3"/>
+		</emitter>
+	</shape>
+	
+	<shape type="obj">
+		<string name="filename" value="cbox_back.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.425,0.243,0.8"/>
+		</bsdf>
+	</shape>
+	
+	<shape type="obj">
+		<string name="filename" value="cbox_ceiling.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.425,0.243,0.8"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="cbox_floor.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.425,0.243,0.8"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="cbox_left.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.425,0.243,0.8"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="cbox_right.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.425,0.243,0.8"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="Cylinder.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.202,0.8,0.338"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="Icosphere.obj"/>
+
+		<bsdf type="dielectric">
+			<float name="ext_ior" value="1"/>
+			<float name="int_ior" value="1.45"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="Plane.obj"/>
+
+		<bsdf type="conductor">
+			<string name="material" value="none"/>
+		</bsdf>
+	</shape>
+</scene>

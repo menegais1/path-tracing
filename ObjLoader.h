@@ -76,6 +76,9 @@ std::vector<Triangle *> LoadObj(const std::string &inputFile, Camera camera, glm
         v0.position = camera.worldToCamera(v0.position + translate);
         v1.position = camera.worldToCamera(v1.position + translate);
         v2.position = camera.worldToCamera(v2.position + translate);
+        v0.normal = camera.normalToCamera(v0.normal + translate);
+        v1.normal = camera.normalToCamera(v1.normal + translate);
+        v2.normal = camera.normalToCamera(v2.normal + translate);
         index_offset += fv;
 
         // per-face material

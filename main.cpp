@@ -12,7 +12,7 @@
 
 #define byte unsigned char
 #define PI 3.145
-std::string OUTPUT_PATH = "../Output/";
+std::string OUTPUT_PATH = "../ooutput/";
 
 
 bool getClosestHit(Ray r, const std::vector<Hittable *> &sceneObjects, HitInfo &hitInfo) {
@@ -154,12 +154,13 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
         glm::dvec3 diffuse_brdf_coef = info.material.albedo * (1.0 / PI);
         double pdf = cos_weighted_hemisphere_pdf(hemisphereCoord);
         double cos_term = glm::max(0.0, glm::dot(info.normal, sampleDirection));
-        glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.1, sampleDirection), sceneObjects,
+        glm::dvec3 sample_radiance = traceRay(Ray(info.point + sampleDirection * 0.01, sampleDirection), sceneObjects,
                                               lightSources, depth + 1, info);
         radiance = (diffuse_brdf_coef * sample_radiance * cos_term) / pdf;
     } else if (info.material.materialType == MaterialType::Mirror) {
+        if (glm::dot(info.incidentRay.direction, info.normal) > 0) return glm::dvec3(0, 0, 0);
         glm::dvec3 sampleDirection = reflectVector(info.incidentRay.direction, info.normal);
-        Ray reflectionRay = Ray(info.point + sampleDirection * 0.1, sampleDirection);
+        Ray reflectionRay = Ray(info.point + sampleDirection * 0.01, sampleDirection);
         HitInfo lightReflectionHit{10000};
         glm::dvec3 sample_radiance = glm::dvec3(0);
         sample_radiance = traceRay(reflectionRay, sceneObjects,
@@ -180,15 +181,14 @@ glm::dvec3 indirect_radiance(HitInfo info, const std::vector<Hittable *> &sceneO
         double rr_refraction = drand48();
         if (rr_refraction < fresnel_reflectance) {
             glm::dvec3 sampleDirection = reflectVector(info.incidentRay.direction, info.normal);
-            Ray reflectionRay = Ray(info.point + sampleDirection * 0.1, sampleDirection);
-            HitInfo lightReflectionHit{10000};
+            Ray reflectionRay = Ray(info.point + sampleDirection * 0.01, sampleDirection);
 
             sample_radiance = traceRay(reflectionRay, sceneObjects,
                                        lightSources, depth + 1, info);
 
             radiance = sample_radiance;
         } else {
-            sample_radiance = traceRay(Ray(info.point + refractionDirection * 0.1, refractionDirection), sceneObjects,
+            sample_radiance = traceRay(Ray(info.point + refractionDirection * 0.01, refractionDirection), sceneObjects,
                                        lightSources, depth + 1, info);
             radiance = sample_radiance;
         }
@@ -206,12 +206,9 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
     // Diffuse calculation
     if (getClosestHit(r, sceneObjects, info)) {
         glm::dvec3 radiance = info.material.emission;
-//        if(radiance.x > 0)
-//            printf("Radiance: %lf %lf %lf\n", radiance.x, radiance.y, radiance.z);
         if (depth > 0 && lastHit.material.materialType == MaterialType::Default) {
             radiance = glm::dvec3(0);
         }
-
 
         glm::dvec3 direct = glm::dvec3(0);
         if (info.material.materialType == MaterialType::Default) {
@@ -256,17 +253,22 @@ traceRay(Ray r, const std::vector<Hittable *> &sceneObjects, const std::vector<H
 //}
 
 inline int toInt(double x) {
-    return int(pow(glm::clamp(x, 0.0, 1.0), 1 / 2.2) * 255 + .5);
+//    double tone_map = x / (1.0 + x);
+    double tone_map = glm::clamp(x, 0.0, 1.0);
+//    return int(tone_map * 255 + .5);
+    return int(pow(tone_map, 1 / 2.2) * 255 + .5);
 }
 
 int main() {
     std::vector<Hittable *> sceneObjects;
     std::vector<Hittable *> lightSources;
-    int width = 1024, height = 768;
-    int NUM_SAMPLES = 100;
+    int width = 768, height = 768;
     Image output(width, height);
 
-#define PLANE_SCENE
+    std::string scene = "scene_02";
+    int NUM_SAMPLES = 8;
+    std::string filename = scene + "/" + std::to_string(NUM_SAMPLES) + "spp.png";
+#define SCENE_2
 
 #ifdef SCENE_SMALL_PT
     //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
@@ -301,29 +303,30 @@ int main() {
     sceneObjects.push_back(lightSource); //Light
     lightSources.push_back(lightSource); //Light
 #endif
-#define PINK 0.88, 0.2, 0.6
-#ifdef PLANE_SCENE
+#define PINK glm::dvec3(0.88, 0.2, 0.6)
+
+#ifdef SCENE_1
     BACKGROUND_COLOR = glm::dvec3(0);
-    //smallPt scene description, notice that some things had to me modified to allow running this specific scene, and need to be recoded for running more general scenes, this one is messy.
-    glm::dvec3 eye = glm::dvec3(278, 273, -800);
-    glm::dvec3 look_at = glm::dvec3(278, 273, -799);
-    Camera camera = Camera(eye, look_at - eye, glm::dvec3(0, 1, 0), 39.3077, 1, width, height);
-    Object *largeBox = new Object(LoadObj("../cbox/meshes/cbox_largebox.obj", camera),
+    glm::dvec3 eye = glm::dvec3(5.1425, 4.9361,-14.538);
+    glm::dvec3 look_at = glm::dvec3(5.1425, 4.9361,-13.538);
+    Camera camera = Camera(eye, look_at - eye, glm::dvec3(0, 1, 0), 40, 1, width, height);
+    Object *largeBox = new Object(LoadObj("../scenes/scene_01/cbox_largebox.001.obj", camera),
                                   Material(glm::dvec3(0), glm::dvec3(.5)));
-    Object *smallBox = new Object(LoadObj("../cbox/meshes/cbox_smallbox.obj", camera),
+    Object *smallBox = new Object(LoadObj("../scenes/scene_01/cbox_smallbox.001.obj", camera),
                                   Material(glm::dvec3(0), glm::dvec3(.5)));
-    Object *backWall = new Object(LoadObj("../cbox/meshes/cbox_back.obj", camera),
+    Object *backWall = new Object(LoadObj("../scenes/scene_01/cbox_back.001.obj", camera),
                                   Material(glm::dvec3(), glm::dvec3(.4)));
-    Object *greenWall = new Object(LoadObj("../cbox/meshes/cbox_greenwall.obj", camera),
+    Object *greenWall = new Object(LoadObj("../scenes/scene_01/cbox_right.001.obj", camera),
                                    Material(glm::dvec3(), glm::dvec3(0,.5,0)));
-    Object *redWall = new Object(LoadObj("../cbox/meshes/cbox_redwall.obj", camera),
+    Object *redWall = new Object(LoadObj("../scenes/scene_01/cbox_left.obj", camera),
                                  Material(glm::dvec3(), glm::dvec3(.5,0,0)));
-    Object *ceiling = new Object(LoadObj("../cbox/meshes/cbox_ceiling.obj", camera),
+    Object *ceiling = new Object(LoadObj("../scenes/scene_01/cbox_ceiling.001.obj", camera),
                                  Material(glm::dvec3(), glm::dvec3(.4)));
-    Object *floor = new Object(LoadObj("../cbox/meshes/cbox_floor.obj", camera),
+    Object *floor = new Object(LoadObj("../scenes/scene_01/cbox_floor.001.obj", camera),
                                Material(glm::dvec3(), glm::dvec3(.4)));
-    Object *luminaire = new Object(LoadObj("../cbox/meshes/cbox_luminaire.obj", camera, {0,-0.5,0}),
-                                   Material(glm::dvec3(18.4, 15.6, 8.0) *2.0, glm::dvec3(0)));
+    Object *luminaire1 = new Object(LoadObj("../scenes/scene_01/cbox_luminaire.001.obj", camera, {0,0,0}),
+                                    Material(glm::dvec3(.220,.052,.005) *300.0, glm::dvec3(0)));
+
     sceneObjects.push_back(largeBox);
     sceneObjects.push_back(smallBox);
     sceneObjects.push_back(backWall);
@@ -331,8 +334,117 @@ int main() {
     sceneObjects.push_back(redWall);
     sceneObjects.push_back(ceiling);
     sceneObjects.push_back(floor);
-    sceneObjects.push_back(luminaire);
-    lightSources.push_back(luminaire);
+    sceneObjects.push_back(luminaire1);
+    lightSources.push_back(luminaire1);
+#endif
+
+#ifdef SCENE_2
+    BACKGROUND_COLOR = glm::dvec3(0);
+    glm::dvec3 eye = glm::dvec3(-32.871, 4.9361, -14.538);
+    glm::dvec3 look_at = glm::dvec3(0, 0, -1);
+    Camera camera = Camera(eye, {0, 0, 1}, glm::dvec3(0, 1, 0), 40, 1, width, height);
+    Object *cylinder = new Object(LoadObj("../scenes/scene_02/Cylinder.obj", camera),
+                                  Material(glm::dvec3(0), glm::dvec3(0.202, 0.8, 0.338)));
+    Object *icosphere = new Object(LoadObj("../scenes/scene_02/Icosphere.obj", camera),
+                                   Material(glm::dvec3(0), glm::dvec3(1), 1.45, MaterialType::Glass));
+    Object *plane = new Object(LoadObj("../scenes/scene_02/Plane.obj", camera),
+                               Material(glm::dvec3(0), glm::dvec3(1), 1.0, MaterialType::Mirror));
+    Material walls = Material(glm::dvec3(), glm::dvec3(0.425, 0.243, 0.800));
+//    Material walls = Material(glm::dvec3(), glm::dvec3(0.4));
+
+    Object *backWall = new Object(LoadObj("../scenes/scene_02/cbox_back.obj", camera),
+                                  walls);
+    Object *greenWall = new Object(LoadObj("../scenes/scene_02/cbox_left.obj", camera),
+                                   walls);
+    Object *redWall = new Object(LoadObj("../scenes/scene_02/cbox_right.obj", camera),
+                                 walls);
+    Object *ceiling = new Object(LoadObj("../scenes/scene_02/cbox_ceiling.obj", camera),
+                                 walls);
+    Object *floor = new Object(LoadObj("../scenes/scene_02/cbox_floor.obj", camera),
+                               walls);
+    Object *luminaire1 = new Object(LoadObj("../scenes/scene_02/cbox_luminaire.obj", camera, {0, 0, 0}),
+                                    Material(glm::dvec3(0.507, 0.241, 0.141) * 300.0, glm::dvec3(0)));
+
+    sceneObjects.push_back(icosphere);
+    sceneObjects.push_back(cylinder);
+    sceneObjects.push_back(plane);
+    sceneObjects.push_back(backWall);
+    sceneObjects.push_back(greenWall);
+    sceneObjects.push_back(redWall);
+    sceneObjects.push_back(ceiling);
+    sceneObjects.push_back(floor);
+    sceneObjects.push_back(luminaire1);
+    lightSources.push_back(luminaire1);
+#endif
+
+//Dragon is too heavy for now
+#ifdef SCENE_3
+    BACKGROUND_COLOR = glm::dvec3(0);
+    glm::dvec3 eye = glm::dvec3(-86.566, 12.648, -35.738);
+    glm::dvec3 look_at = glm::dvec3(0, 0, -1);
+    Camera camera = Camera(eye, {0, 0, 1}, glm::dvec3(0, 1, 0), 40, 1, width, height);
+    Object *dragon = new Object(LoadObj("../scenes/scene_03/dragon_vrip_res2.obj", camera),
+                                Material(glm::dvec3(0), glm::dvec3(0.801, 0.382, 0.284)));
+
+    Material walls = Material(glm::dvec3(), glm::dvec3(0.247, 0.385, 0.761));
+
+    Object *backWall = new Object(LoadObj("../scenes/scene_03/fundo_infinito.obj", camera),
+                                  walls);
+
+    Object *luminaire1 = new Object(LoadObj("../scenes/scene_03/luz_menor.obj", camera, {0, 0, 0}),
+                                    Material(glm::dvec3(0.601, 0.943, 1) * 20.0, glm::dvec3(0)));
+    Object *luminaire2 = new Object(LoadObj("../scenes/scene_03/luz_maior.obj", camera, {0, 0, 0}),
+                                    Material(glm::dvec3(1, 0.862, 0.703) * 30.0, glm::dvec3(0)));
+
+    sceneObjects.push_back(dragon);
+    sceneObjects.push_back(backWall);
+    sceneObjects.push_back(luminaire1);
+    lightSources.push_back(luminaire1);
+    sceneObjects.push_back(luminaire2);
+    lightSources.push_back(luminaire2);
+#endif
+
+#ifdef SCENE_4
+    BACKGROUND_COLOR = glm::dvec3(0);
+    glm::dvec3 eye = glm::dvec3(-141.28, 4.9361, -14.538);
+    glm::dvec3 look_at = glm::dvec3(0, 0, -1);
+    Camera camera = Camera(eye, {0, 0, 1}, glm::dvec3(0, 1, 0), 40, 1, width, height);
+//    Object *sphere_front = new Object(LoadObj("../scenes/scene_04/esfera_frente.obj", camera),
+//                                      Material(glm::dvec3(0), glm::dvec3(1),1.0, MaterialType::Mirror));
+//    Object *sphere_back = new Object(LoadObj("../scenes/scene_04/esfera_tras.obj", camera),
+//                                     Material(glm::dvec3(0), glm::dvec3(1), 1.45, MaterialType::Glass));
+    Sphere *sphere_front = new Sphere(3.79 /2.0, camera.worldToCamera(glm::dvec3(-143.58,1.916,2.1574)),
+                                      Material(glm::dvec3(0), glm::dvec3(.9),1.45, MaterialType::Glass));
+    Sphere *sphere_back = new Sphere(3.79 /2.0, camera.worldToCamera(glm::dvec3(-139.27,1.916,6.3204)),
+                                      Material(glm::dvec3(0), glm::dvec3(.9),1.0, MaterialType::Mirror));
+    Object *backWall = new Object(LoadObj("../scenes/scene_04/cbox_back.003.obj", camera),
+                                  Material(glm::dvec3(0),glm::dvec3(0.247,0.385,0.761)));
+    Object *ceiling = new Object(LoadObj("../scenes/scene_04/cbox_ceiling.003.obj", camera),
+                                 Material(glm::dvec3(0),glm::dvec3(1)));
+    Object *floor = new Object(LoadObj("../scenes/scene_04/cbox_floor.003.obj", camera),
+                               Material(glm::dvec3(0),glm::dvec3(1)));
+
+    Object *greenWall = new Object(LoadObj("../scenes/scene_04/cbox_left.obj", camera),
+                                   Material(glm::dvec3(0),glm::dvec3(.9),1.0,MaterialType::Mirror));
+    Object *redWall = new Object(LoadObj("../scenes/scene_04/cbox_right.obj", camera),
+                                 Material(glm::dvec3(0),glm::dvec3(.9),1.0,MaterialType::Mirror));
+    Object *luminaire1 = new Object(LoadObj("../scenes/scene_04/luz_chao.obj", camera, {0, 0, 0}),
+                                    Material(glm::dvec3(0.507, 0.241, 0.141) * 50.0, glm::dvec3(0)));
+    Object *luminaire2 = new Object(LoadObj("../scenes/scene_04/luz_teto.obj", camera, {0, 0, 0}),
+                                    Material(glm::dvec3(0.507, 0.241, 0.141) * 50.0, glm::dvec3(0)));
+
+
+    sceneObjects.push_back(backWall);
+    sceneObjects.push_back(sphere_back);
+    sceneObjects.push_back(sphere_front);
+    sceneObjects.push_back(greenWall);
+    sceneObjects.push_back(redWall);
+    sceneObjects.push_back(ceiling);
+    sceneObjects.push_back(floor);
+    sceneObjects.push_back(luminaire1);
+    lightSources.push_back(luminaire1);
+    sceneObjects.push_back(luminaire2);
+    lightSources.push_back(luminaire2);
 #endif
 
 #ifdef WHITE_FURNACE
@@ -368,7 +480,7 @@ int main() {
             output.pixel(x, y, glm::vec3(toInt(color.x), toInt(color.y), toInt(color.z)));
         }
     }
-    output.write(OUTPUT_PATH + "teste.png");
+    output.write(OUTPUT_PATH + filename);
 
     fprintf(stderr, "\nRender time: %ld seconds", time(nullptr) - curTime);
     return 0;

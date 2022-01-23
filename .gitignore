@@ -33,5 +33,4 @@
 
 cmake-build-debug
 .idea
-Output
-cbox
+output

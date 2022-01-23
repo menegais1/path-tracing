@@ -168,7 +168,6 @@ public:
             info.point = r.origin + r.direction * info.t;
             double dist = glm::distance(info.point, position);
             if (dist > radius) return false;
-//            printf("Dist: %lf", dist);
             info.normal = denom > 0 ? -normal : normal;
             info.material = material;
             info.object = this;
@@ -249,10 +248,23 @@ public:
             info.t = t;
             info.point = r.origin + r.direction * t;
             info.material = material;
-            info.normal = glm::normalize(glm::cross(v1.position - v0.position, v2.position - v0.position));
+            glm::dvec3 bar = barCoords(info.point);
+            info.normal = glm::normalize(bar[0] * v0.normal + bar[1] * v1.normal + bar[2] * v2.normal);
+            info.insideObject = false;
+            if (glm::dot(info.normal, r.direction) > 0) {
+                info.insideObject = true;
+                info.normal = -info.normal;
+            }
             return true;
         } else // This means that there is a line intersection but not a ray intersection.
             return false;
+    }
+
+    glm::dvec3 barCoords(glm::dvec3 p) {
+        double a = area();
+        double u = glm::length(glm::cross(v0.position - v2.position, p - v2.position)) / 2.0 / a;
+        double v = glm::length(glm::cross(v1.position - v0.position, p - v0.position)) / 2.0 / a;
+        return {u, v, 1 - u - v};
     }
 
     double area() override {
@@ -267,7 +279,7 @@ public:
         double b0 = 1 - su0;
         double b1 = v * su0;
         point = v0.position * b0 + v1.position * b1 + v2.position * (1.0 - b0 - b1);
-        normal = glm::normalize(glm::cross(v1.position - v0.position, v2.position - v0.position));
+        normal = glm::normalize(b0 * v0.normal + b1 * v1.normal + (1.0 - b0 - b1) * v2.normal);
     }
 
     double uniform_pdf() override {
@@ -296,6 +308,10 @@ public:
         info.material = material;
         info.object = this;
         info.incidentRay = r;
+        if (material.materialType == MaterialType::Mirror && info.insideObject) {
+            info.insideObject = false;
+            info.normal = -info.normal;
+        }
         return hit;
     }
 
